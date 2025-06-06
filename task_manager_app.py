@@ -56,6 +56,38 @@ filtered = df[df["Status"].isin(status_filter)]
 st.subheader("📋 Offene Aufgaben")
 st.dataframe(filtered)
 
+# --- KALENDERANSICHT ---
+
+import streamlit_calendar as st_calen
+
+st.subheader("📋 Offene Aufgaben")
+st.dataframe(filtered)
+
+st.subheader("📅 Kalenderansicht der Aufgaben")
+calendar_events = []
+for _, row in filtered.iterrows():
+    if pd.notna(row["Deadline"]):
+        calendar_events.append({
+            "title": row["Title"],
+            "start": row["Deadline"].strftime("%Y-%m-%d"),
+            "end": row["Deadline"].strftime("%Y-%m-%d"),
+            "allDay": True,
+        })
+
+calendar_options = {
+    "initialView": "dayGridMonth",
+    "locale": "de",
+    "height": 500,
+}
+
+st_calen.calendar(
+    events=calendar_events,
+    options=calendar_options,
+    custom_css="""
+        .fc-event-title { font-size: 1rem; }
+    """
+)
+
 # --- AUFGABEN BEARBEITEN UND LÖSCHEN ---
 st.subheader("✏️ Aufgabe bearbeiten oder löschen")
 for idx, row in filtered.iterrows():
@@ -77,3 +109,4 @@ for idx, row in filtered.iterrows():
                 save_data(df)
                 st.warning("Aufgabe gelöscht.")
                 st.experimental_rerun()
+
