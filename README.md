@@ -7,6 +7,7 @@ Tasks erstellen und nach Dringlichkeit sortieren
 Tasks abschließen und als finalisiert markieren
 Erinnerungen zu den Tasks hinzufügen
 Eine Übersicht über alle Tasks haben
+Nach Tasks filtern können
 
 
 
