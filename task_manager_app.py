@@ -7,7 +7,7 @@ try:
     from streamlit_calendar import calendar
     CALENDAR_AVAILABLE = True
 except ImportError:
-    CALendar_AVAILABLE = False
+    CALENDAR_AVAILABLE = False
 
 
 # Seitenkonfiguration
@@ -50,7 +50,15 @@ def delete_task(task_id):
 
 def format_deadline(deadline):
     if deadline:
-        return f"Deadline: {deadline.strftime('%d.%m.%Y')}"
+        # Füge ein Emoji basierend auf der Dringlichkeit hinzu
+        if deadline < date.today():
+            return f"🚨 Deadline: {deadline.strftime('%d.%m.%Y')} (Überfällig!)"
+        elif deadline == date.today():
+            return f"⚠️ Deadline: {deadline.strftime('%d.%m.%Y')} (Heute!)"
+        elif deadline < date.today() + timedelta(days=3):
+            return f"⏳ Deadline: {deadline.strftime('%d.%m.%Y')} (Bald!)"
+        else:
+            return f"🗓️ Deadline: {deadline.strftime('%d.%m.%Y')}"
     return "Keine Deadline"
 
 # --- HAUPT-UI (OHNE TABS) ---
@@ -64,6 +72,7 @@ st.header("Aufgabenliste")
 # Formular zum Erstellen
 priorities = {"Niedrig": 1, "Mittel": 2, "Hoch": 3}
 with st.form("new_task_form", clear_on_submit=True):
+    st.markdown("##### Neue Aufgabe hinzufügen")
     new_task_title = st.text_input("Was ist zu tun?", placeholder="z.B. Meeting vorbereiten")
     col1, col2 = st.columns(2)
     with col1:
@@ -89,46 +98,62 @@ if not st.session_state.tasks:
     st.info("Du hast derzeit keine Aufgaben.")
 else:
     # Filter-Optionen
-    filter_col1, filter_col2 = st.columns(2)
+    st.markdown("##### Filter und Sortierung")
+    filter_col1, filter_col2, filter_col3 = st.columns(3)
     with filter_col1:
         filter_status = st.selectbox("Nach Status filtern:", ["Alle", "Offen", "Abgeschlossen"])
     with filter_col2:
         filter_priority = st.selectbox("Nach Dringlichkeit filtern:", ["Alle"] + list(priorities.keys()))
+    with filter_col3:
+        sort_by_deadline = st.checkbox("Nach Deadline sortieren")
 
     # Logik zum Filtern und Sortieren
     filtered_tasks = [t for t in st.session_state.tasks if
                       (filter_status == "Alle" or (filter_status == "Offen" and not t['completed']) or (filter_status == "Abgeschlossen" and t['completed'])) and
                       (filter_priority == "Alle" or t['priority_label'] == filter_priority)]
-    sorted_tasks = sorted(filtered_tasks, key=lambda x: (x['completed'], -x.get('priority_level', 0)))
+    
+    if sort_by_deadline:
+        # Sortiert nach abgeschlossen, dann nach Deadline (None am Ende), dann nach Priorität
+        sorted_tasks = sorted(filtered_tasks, key=lambda x: (x['completed'], x['deadline'] if x['deadline'] else date.max, -x.get('priority_level', 0)))
+    else:
+        # Sortiert nach abgeschlossen, dann nach Priorität
+        sorted_tasks = sorted(filtered_tasks, key=lambda x: (x['completed'], -x.get('priority_level', 0)))
 
     if not sorted_tasks:
         st.warning("Keine Aufgaben entsprechen deinen Filterkriterien.")
     else:
+        st.markdown("---")
         for task in sorted_tasks:
-            # (Der Code zur Anzeige der einzelnen Aufgaben bleibt unverändert)
             task_id, task_index = task['id'], get_task_index_by_id(task['id'])
+            # Verwendung von st.container für einen besseren visuellen Rahmen
             with st.container(border=True):
-                col1, col2 = st.columns([0.05, 0.95])
-                with col1:
+                # Anordnung von Checkbox und Titel in zwei Spalten
+                col_check, col_title_prio_deadline, col_actions = st.columns([0.05, 0.7, 0.25])
+                
+                with col_check:
                     is_completed = st.checkbox("", value=task['completed'], key=f"cb_{task_id}")
                     if is_completed != task['completed']:
                         st.session_state.tasks[task_index]['completed'] = is_completed
                         st.rerun()
-                with col2:
+                
+                with col_title_prio_deadline:
+                    # Titel, Dringlichkeit und Deadline direkt anzeigen
                     title_display = f"**{task['title']}**"
-                    if task['completed']: title_display = f"~~{title_display}~~"
-                    with st.expander(f"{title_display} - Dringlichkeit: {task['priority_label']}"):
-                        st.markdown(f"**{format_deadline(task.get('deadline'))}**")
-                        st.markdown("---")
+                    if task['completed']: 
+                        title_display = f"~~{title_display}~~"
+                    st.markdown(f"{title_display} - Dringlichkeit: `{task['priority_label']}`")
+                    st.markdown(f"<small>{format_deadline(task.get('deadline'))}</small>", unsafe_allow_html=True)
+
+                with col_actions:
+                    # Bearbeiten und Löschen als Expander oder direkt
+                    with st.expander("Optionen"):
                         edited_title = st.text_input("Titel ändern:", value=task['title'], key=f"title_{task_id}")
-                        edit_col1, edit_col2 = st.columns(2)
-                        with edit_col1:
-                            edited_priority = st.selectbox("Dringlichkeit ändern:", options=priorities.keys(), index=list(priorities.keys()).index(task['priority_label']), key=f"prio_{task_id}")
-                        with edit_col2:
-                            edited_deadline = st.date_input("Deadline ändern:", value=task.get('deadline'), key=f"deadline_{task_id}", min_value=datetime.today())
-                        update_col, delete_col = st.columns([0.2, 0.8])
+                        edited_priority = st.selectbox("Dringlichkeit ändern:", options=priorities.keys(), index=list(priorities.keys()).index(task['priority_label']), key=f"prio_{task_id}")
+                        edited_deadline = st.date_input("Deadline ändern:", value=task.get('deadline'), key=f"deadline_{task_id}", min_value=datetime.today())
+                        
+                        update_col, delete_col = st.columns(2)
                         with update_col:
-                           if st.button("💾 Speichern", key=f"save_{task_id}"):
+                            if st.button("💾 Speichern", key=f"save_{task_id}"):
                                 st.session_state.tasks[task_index].update({
                                     'title': edited_title, 'priority_label': edited_priority,
                                     'priority_level': priorities[edited_priority], 'deadline': edited_deadline
@@ -161,14 +186,15 @@ else:
                 "end": task["deadline"].isoformat(), "color": color, "allDay": True,
             })
 
-    # --- WICHTIGER DEBUGGING-SCHRITT ---
-    st.markdown("Rohdaten für den Kalender (zum Debuggen):")
-    st.json(calendar_events) # Diese Zeile zeigt die aufbereiteten Daten an.
-
     calendar_options = {
         "headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,timeGridDay"},
-        "initialView": "dayGridMonth", "locale": "de", "editable": False,
+        "initialView": "dayGridMonth", 
+        "locale": "de", 
+        "editable": False,
+        "height": "400px",  # Kalenderhöhe angepasst, um ihn kleiner zu machen
+        "contentHeight": "auto", # Stellt sicher, dass der Inhalt skaliert
+        "aspectRatio": 1.8 # Passt das Seitenverhältnis an, um den Kalender kompakter zu machen
     }
     
     # Rendere den Kalender
-    calendar(events=calendar_events, options=calendar_options, key=str(calendar_events)) # Key geändert für robustes Rerendering
+    calendar(events=calendar_events, options=calendar_options, key=str(calendar_events))
