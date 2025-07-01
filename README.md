@@ -1,5 +1,13 @@
 # taskmanager-app
 
+# Teammitglieder:
+Adrian Cassani
+Tobias Blumenauer
+Julian Hagenbucher
+Nina Kern
+Lola Flieher
+Rosa Gräff
+
 # Key Features:
 Funktionierende Web-Oberfläche
 Tasks bearbeiten und löschen können
